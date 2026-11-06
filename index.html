@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Roll Call Order</title>
+<style>
+:root {
+  --gold:#e5bd65; --gold-soft:#b98d3d; --ivory:#f7f2e7;
+  --green:#142c22; --deep:#07120d;
+}
+* { box-sizing:border-box; }
+html,body { width:100%; min-height:100%; margin:0; }
+body {
+  min-height:100vh; overflow:hidden; color:var(--ivory);
+  font-family:Georgia,"Times New Roman",serif;
+  background:radial-gradient(ellipse at 50% 0%,rgba(216,177,91,.16),transparent 42%),
+    radial-gradient(ellipse at 12% 88%,rgba(50,105,75,.22),transparent 38%),
+    linear-gradient(135deg,#101e18,#050b08 78%);
+  display:flex; align-items:stretch; justify-content:center;
+}
+.toolbar {
+  position:fixed; z-index:30; top:12px; right:18px; display:flex;
+  align-items:center; flex-wrap:wrap; justify-content:flex-end; gap:8px;
+  max-width:calc(100vw - 36px); padding:7px 9px;
+  border:1px solid #d4ae5b55; border-radius:8px;
+  background:rgba(5,15,10,.92); box-shadow:0 5px 20px #0005;
+  backdrop-filter:blur(10px);
+}
+button {
+  border:1px solid rgba(229,189,101,.8); border-radius:5px;
+  background:rgba(18,45,33,.96); color:#fff3d5;
+  padding:9px 13px; font:700 12px Arial,sans-serif; letter-spacing:.04em;
+  cursor:pointer; transition:background .2s ease,transform .2s ease;
+}
+button:hover { background:#31543f; transform:translateY(-1px); }
+.publish-btn { background:linear-gradient(135deg,#c99b42,#98702a); color:#101a12; border-color:#f4d58c; font-weight:800; }
+.publish-btn:hover { background:linear-gradient(135deg,#f0ce7a,#b98d3d); }
+.publish-btn:disabled { opacity:.55; cursor:wait; transform:none; }
+.publish-status { align-self:center; color:#e5bd65; font:700 10px Arial,sans-serif; letter-spacing:.06em; padding:8px 9px; border:1px solid #d4ae5b66; border-radius:5px; white-space:nowrap; }
+.publish-status.online { color:#a9e5b8; border-color:#65b77a88; }
+.publish-status.error { color:#ffb0a5; border-color:#d66b5e88; }
+body.tv-mode .toolbar { display:none; }
+body.tv-mode [contenteditable="true"] { cursor:default; }
+body.tv-mode [contenteditable="true"]:focus { outline:none; }
+.stage {
+  width:100vw; height:100vh; min-height:0; position:relative;
+  padding:clamp(88px,10vh,118px) 2vw 1.5vh;
+  display:flex; flex-direction:column; gap:0;
+  border:1px solid rgba(229,189,101,.78); isolation:isolate; overflow:hidden;
+  background:radial-gradient(ellipse at 50% 0%,rgba(229,189,101,.12),transparent 44%),
+    linear-gradient(145deg,rgba(30,57,43,.98),rgba(7,18,13,.99) 76%);
+  box-shadow:inset 0 0 0 8px rgba(229,189,101,.035),inset 0 0 70px #0006;
+  animation:stageIn .7s ease both;
+}
+.stage:before { content:""; position:absolute; inset:14px; border:1px solid rgba(229,189,101,.22); pointer-events:none; z-index:-1; }
+.stage:after { content:""; position:absolute; z-index:-1; top:-60%; left:-55%; width:35%; height:220%; transform:rotate(22deg); background:linear-gradient(90deg,transparent,#ffffff0a,transparent); animation:lightSweep 15s ease-in-out infinite; }
+.top { flex:0 0 auto; display:flex; flex-direction:column; gap:.8vh; }
+.topline { display:grid; grid-template-columns:minmax(240px,27%) minmax(0,1fr); align-items:center; gap:1.2vw; width:100%; }
+.published-stamp { min-width:0; min-height:clamp(100px,12vh,160px); padding:1.2vh 1.2vw; display:flex; flex-direction:column; justify-content:center; color:#fff8e8; text-align:left; font:900 clamp(24px,2.7vw,42px)/1.15 Arial,sans-serif; letter-spacing:.025em; text-shadow:0 0 12px #e5bd6570; overflow-wrap:anywhere; border:2px solid #e5bd65; border-radius:8px; background:linear-gradient(135deg,#172f23,#09140e); box-shadow:0 0 20px #e5bd6530,inset 0 0 16px #0005; }
+.published-stamp small { display:block; color:var(--gold); font-size:.48em; letter-spacing:.16em; margin-bottom:.65vh; }
+.ticker { position:relative; overflow:hidden; min-width:0; height:clamp(40px,5.2vh,62px); display:flex; align-items:center; border:1px solid #e5bd6580; border-radius:6px; background:linear-gradient(90deg,#2a2110,#493719,#2a2110); box-shadow:0 0 16px #e5bd6530; }
+.ticker-track { display:inline-block; width:max-content; min-width:max-content; white-space:nowrap; padding-left:100%; color:#39ff14; font:900 clamp(16px,1.65vw,25px) Arial,sans-serif; letter-spacing:.10em; text-shadow:0 0 5px #39ff14,0 0 11px #39ff14,0 0 20px #20d900; animation:tickerScroll 22s linear infinite; }
+.ticker-track:empty:before { content:'IMPORTANT ANNOUNCEMENT'; color:#39ff14; text-shadow:0 0 5px #39ff14,0 0 11px #39ff14,0 0 20px #20d900; }
+.ticker:focus-within .ticker-track { animation-play-state:paused; outline:2px solid #39ff14; outline-offset:-3px; }
+.heading { text-align:center; padding:.15vh 0 .2vh; }
+h1 { margin:0; color:#fff8e8; font:900 clamp(30px,3.8vw,58px)/1.05 Arial,sans-serif; letter-spacing:.12em; text-shadow:0 3px 14px #0007; }
+.rule { flex:0 0 auto; width:min(180px,18vw); height:2px; margin:.6vh auto .7vh; background:linear-gradient(90deg,transparent,var(--gold),transparent); box-shadow:0 0 12px #e5bd6577; animation:rulePulse 4s ease-in-out infinite; }
+.meta { flex:0 0 auto; display:flex; justify-content:center; align-items:center; gap:.8vh 3vw; flex-wrap:wrap; margin:0 auto .8vh; padding:.6vh 1.5vw; border-top:1px solid #d4ae5b66; border-bottom:1px solid #d4ae5b66; color:#e8dfca; font:700 clamp(12px,1.05vw,16px) Arial,sans-serif; letter-spacing:.04em; }
+.meta strong { color:var(--gold); }
+.orderbox {
+  flex:1 1 80vh; min-height:80vh; height:80vh; width:100%; display:flex; flex-direction:column;
+  margin:0 auto; padding:1vh 1vw .8vh;
+  border:1px solid rgba(229,189,101,.8); border-radius:8px;
+  background:rgba(255,255,255,.07); box-shadow:0 10px 34px #0004;
+  overflow:hidden;
+}
+.orderbox h3 { flex:0 0 auto; margin:0 0 1vh; text-align:center; color:var(--gold); font:800 clamp(14px,1.4vw,21px) Arial,sans-serif; letter-spacing:.12em; }
+.ordertext {
+  flex:1 1 auto; min-height:0; width:100%; overflow:auto; outline:none;
+  color:#17231c; background:#fff; border:1px solid #d9dfda; border-radius:6px;
+  text-align:left; white-space:pre-wrap; overflow-wrap:anywhere;
+  font:700 clamp(36px,4.4vw,76px)/1.22 Arial,sans-serif;
+  padding:2vh 2.2vw; caret-color:#31543f; box-shadow:inset 0 1px 4px #00000012;
+}
+.ordertext:empty:before { content:attr(data-placeholder); color:#77827b; font-style:italic; }
+/* Fixed line-by-line colour sequence: black, blue, red, then repeat. */
+.ordertext .line-color-1 { color:#111111 !important; }
+.ordertext .line-color-2 { color:#0756c9 !important; }
+.ordertext .line-color-3 { color:#d00000 !important; }
+.ordertext .line-color-1 *, .ordertext .line-color-2 *, .ordertext .line-color-3 * { color:inherit !important; }
+.ordertext span[style] { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.ordertext:focus { outline:3px solid #e5bd65; outline-offset:-3px; }
+[contenteditable="true"] { cursor:text; }
+[contenteditable="true"]:focus { outline:1px dashed #e5bd6580; outline-offset:3px; }
+@keyframes stageIn { from{opacity:0;transform:scale(.99)} to{opacity:1;transform:scale(1)} }
+@keyframes rulePulse { 0%,100%{opacity:.7} 50%{opacity:1;box-shadow:0 0 18px #e5bd65aa} }
+@keyframes lightSweep { 0%,70%{left:-55%;opacity:0} 76%{opacity:1} 100%{left:125%;opacity:0} }
+@keyframes tickerScroll { from{transform:translateX(0)} to{transform:translateX(-100%)} }
+@media (max-width:900px) {
+  body { overflow:auto; display:block; }
+  .stage { width:100%; height:auto; min-height:100vh; overflow:visible; padding:105px 18px 18px; }
+  .topline { grid-template-columns:1fr; gap:12px; }
+  .published-stamp { text-align:center; }
+  .ticker { width:100%; }
+  .orderbox { flex:0 0 auto; height:80vh; min-height:80vh; }
+  .ordertext { min-height:0; height:100%; }
+  .toolbar { left:10px; right:10px; top:8px; justify-content:center; }
+}
+@media (max-aspect-ratio: 4/3) and (min-width:901px) {
+  .stage { padding-top:105px; }
+  .topline { grid-template-columns:minmax(190px,30%) minmax(0,1fr); }
+}
+@media (prefers-reduced-motion:reduce) { *,*:before,*:after{animation:none!important;transition:none!important} }
+@media print {
+  @page { size:16in 9in; margin:0; }
+  body { width:16in; height:9in; display:block; background:#07120d; }
+  .toolbar { display:none; }
+  .stage { width:16in; height:9in; border:0; box-shadow:none; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+  .ordertext { overflow:visible; }
+}
+
+/* Full-screen layout refinement: use the entire display and eliminate unused gaps. */
+.stage {
+  height:100vh; min-height:0;
+  padding:clamp(68px,7.5vh,88px) 1.4vw 1.1vh;
+  display:flex; flex-direction:column; gap:.55vh;
+}
+.top { flex:0 0 auto; gap:.55vh; }
+.topline { gap:1vw; }
+.published-stamp { min-height:clamp(88px,11vh,132px); padding:.8vh 1vw; }
+.ticker { height:clamp(42px,5.5vh,58px); }
+.heading { padding:.15vh 0; }
+h1 { font-size:clamp(27px,3.2vw,48px); }
+.rule { margin:.25vh auto .35vh; height:2px; }
+.meta { margin:0 auto .35vh; padding:.35vh 1.2vw; }
+.orderbox {
+  flex:1 1 0; min-height:0; height:auto; width:100%;
+  margin:0; padding:.65vh .7vw .7vh;
+}
+.orderbox h3 { margin:0 0 .55vh; }
+.ordertext { flex:1 1 0; min-height:0; height:100%; padding:1.2vh 1.6vw; }
+@media (max-width:900px) {
+  .stage { height:auto; min-height:100vh; padding:100px 14px 14px; gap:10px; }
+  .orderbox { flex:0 0 auto; height:calc(100vh - 230px); min-height:420px; }
+  .ordertext { min-height:0; height:100%; }
+}
+
+
+/* Header layout: publication details left; title and announcement stacked on the right. */
+.stage { padding-top:clamp(76px,8vh,96px); gap:.55vh; }
+.top { display:grid; grid-template-columns:minmax(260px,29%) minmax(0,1fr); align-items:stretch; gap:1.2vw; width:100%; }
+.published-stamp { min-height:clamp(128px,17vh,190px); height:100%; font-size:clamp(27px,3vw,46px); padding:1.4vh 1.4vw; }
+.published-stamp small { font-size:.42em; }
+.right-top { min-width:0; display:flex; flex-direction:column; justify-content:center; gap:1.2vh; }
+.heading { display:flex; align-items:center; justify-content:center; min-height:clamp(62px,8vh,92px); padding:0 1vw; border:1px solid #e5bd6555; border-radius:8px; background:linear-gradient(120deg,#142b20,#203d2d 55%,#142b20); box-shadow:inset 0 0 18px #0004,0 5px 18px #0003; }
+h1 { text-align:center; font-size:clamp(32px,4vw,62px); letter-spacing:.09em; }
+.ticker { width:100%; height:clamp(54px,7vh,78px); }
+.ticker-track { font-size:clamp(19px,2vw,30px); }
+.rule { margin:.35vh auto .45vh; }
+.meta { margin:0 auto .5vh; }
+.orderbox { flex:1 1 0; min-height:0; }
+@media (max-width:900px) {
+  .stage { padding:104px 14px 14px; height:auto; min-height:100vh; }
+  .top { grid-template-columns:1fr; gap:10px; }
+  .published-stamp { min-height:105px; text-align:center; }
+  .right-top { gap:8px; }
+  .heading { min-height:76px; }
+  h1 { font-size:clamp(25px,6vw,42px); }
+  .ticker { height:56px; }
+}
+
+/* 80%-screen order layout: compact header, compact clock strip, dominant order panel. */
+.stage {
+  height:100vh; min-height:0; overflow:hidden;
+  padding:clamp(58px,6.5vh,76px) 1.25vw .55vh;
+  display:flex; flex-direction:column; gap:.35vh;
+}
+.top {
+  flex:0 0 10vh; min-height:0;
+  display:grid; grid-template-columns:minmax(230px,27%) minmax(0,1fr);
+  align-items:stretch; gap:.9vw; width:100%;
+}
+.published-stamp {
+  height:100%; min-height:0; padding:.55vh .9vw;
+  font-size:clamp(22px,2.35vw,36px); line-height:1.08;
+}
+.published-stamp small { margin-bottom:.35vh; font-size:.43em; }
+.right-top { min-width:0; display:flex; flex-direction:column; justify-content:stretch; gap:.4vh; }
+.heading { flex:1 1 0; min-height:0; padding:0 .7vw; }
+h1 { font-size:clamp(25px,3.1vw,46px); line-height:1; }
+.ticker { flex:1 1 0; min-height:0; height:auto; }
+.ticker-track { font-size:clamp(16px,1.7vw,25px); }
+.rule { display:none; }
+.meta {
+  flex:0 0 2.8vh; min-height:22px; margin:0 auto .25vh;
+  padding:.15vh 1vw; gap:.4vh 2.5vw; font-size:clamp(11px,.9vw,14px);
+}
+.orderbox {
+  flex:1 1 0; min-height:0; height:auto; width:100%;
+  margin:0; padding:.55vh .6vw .6vh; gap:0;
+}
+.orderbox h3 { flex:0 0 auto; margin:0 0 .4vh; font-size:clamp(12px,1.05vw,16px); }
+.ordertext {
+  flex:1 1 0; min-height:0; height:100%; padding:1vh 1.3vw;
+  font-size:clamp(34px,4.2vw,72px); line-height:1.18;
+}
+@media (max-width:900px) {
+  body { overflow:auto; display:block; }
+  .stage { height:auto; min-height:100vh; overflow:visible; padding:100px 14px 14px; gap:9px; }
+  .top { flex:0 0 auto; display:grid; grid-template-columns:1fr; gap:8px; }
+  .published-stamp { min-height:82px; height:auto; text-align:center; }
+  .right-top { gap:7px; }
+  .heading { min-height:58px; }
+  h1 { font-size:clamp(23px,6vw,38px); }
+  .ticker { min-height:44px; }
+  .meta { flex:0 0 auto; min-height:30px; margin:0; }
+  .orderbox { flex:0 0 auto; height:80vh; min-height:360px; }
+  .ordertext { min-height:0; height:100%; font-size:clamp(28px,5vw,48px); }
+}
+@media print {
+  .stage { height:9in; padding:0.55in .2in .08in; }
+  .top { flex-basis:.9in; }
+  .meta { flex-basis:.25in; }
+  .orderbox { flex:1 1 0; }
+}
+
+
+
+/* FINAL OVERLAP-PROOF LAYOUT: toolbar occupies its own row; content never sits underneath it. */
+html, body { width:100%; height:100%; min-height:0; }
+body { min-height:100vh; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+.toolbar {
+  position:relative; inset:auto; z-index:30; flex:0 0 auto;
+  width:100%; max-width:none; min-height:48px; padding:6px 12px;
+  border-radius:0; justify-content:flex-end; gap:7px;
+}
+.stage {
+  position:relative; flex:1 1 auto; min-height:0; height:auto; width:100%;
+  padding:1vh 1.25vw .7vh; gap:.45vh; overflow:hidden;
+  display:flex; flex-direction:column;
+}
+body.tv-mode .stage { flex:1 1 auto; height:100%; padding:1.2vh 1.25vw .8vh; }
+.top {
+  flex:0 0 14vh; min-height:0; height:14vh; max-height:14vh;
+  display:grid; grid-template-columns:minmax(220px,27%) minmax(0,1fr);
+  align-items:stretch; gap:1vw; width:100%;
+}
+.published-stamp {
+  min-width:0; min-height:0; height:100%; padding:.65vh .85vw;
+  font-size:clamp(20px,2.2vw,34px); line-height:1.08;
+}
+.published-stamp small { margin-bottom:.3vh; font-size:.43em; }
+.right-top { min-width:0; min-height:0; height:100%; display:flex; flex-direction:column; justify-content:stretch; gap:.55vh; }
+.heading { flex:1 1 0; min-width:0; min-height:0; height:auto; padding:.3vh .8vw; display:flex; align-items:center; justify-content:center; }
+h1 { max-width:100%; font-size:clamp(23px,3vw,44px); line-height:1.05; letter-spacing:.07em; overflow-wrap:anywhere; }
+.ticker { flex:0 0 4.8vh; min-height:32px; height:4.8vh; max-height:5.2vh; min-width:0; }
+.ticker-track { font-size:clamp(15px,1.7vw,24px); }
+.rule { display:none; }
+.meta {
+  flex:0 0 auto; min-height:28px; margin:0 auto .2vh; padding:.35vh 1vw;
+  gap:.35vh 2.5vw; font-size:clamp(11px,.9vw,14px); line-height:1.2;
+}
+.orderbox {
+  flex:1 1 0; min-height:0; height:auto; width:100%; min-width:0;
+  margin:0; padding:.55vh .6vw .6vh; overflow:hidden;
+}
+.orderbox h3 { flex:0 0 auto; margin:0 0 .45vh; font-size:clamp(12px,1.05vw,16px); line-height:1.2; }
+.ordertext {
+  display:block; flex:1 1 0; min-height:0; height:100%; min-width:0;
+  padding:1vh 1.3vw; font-size:clamp(32px,4vw,70px); line-height:1.18;
+  overflow:auto; overflow-wrap:anywhere;
+}
+@media (max-height:650px) and (min-width:901px) {
+  .toolbar { min-height:42px; padding:4px 8px; }
+  .top { flex-basis:15vh; height:15vh; max-height:15vh; }
+  .published-stamp { font-size:clamp(18px,1.8vw,27px); }
+  .ticker { flex-basis:4.4vh; height:4.4vh; }
+  .meta { min-height:23px; padding:.15vh .8vw; }
+}
+@media (max-width:900px) {
+  html, body { height:auto; min-height:100%; }
+  body { min-height:100vh; height:auto; overflow:auto; display:flex; flex-direction:column; }
+  .toolbar { position:relative; top:auto; left:auto; right:auto; width:100%; max-width:none; justify-content:center; padding:8px; }
+  .stage, body.tv-mode .stage {
+    flex:1 0 auto; width:100%; height:auto; min-height:calc(100vh - 60px);
+    overflow:visible; padding:12px 12px 14px; gap:9px;
+  }
+  .top { flex:0 0 auto; height:auto; max-height:none; display:grid; grid-template-columns:1fr; gap:8px; }
+  .published-stamp { height:auto; min-height:82px; text-align:center; font-size:clamp(20px,5vw,30px); }
+  .right-top { height:auto; gap:8px; }
+  .heading { min-height:64px; }
+  h1 { font-size:clamp(22px,5.5vw,36px); }
+  .ticker { flex:0 0 46px; min-height:46px; height:46px; max-height:none; }
+  .meta { flex:0 0 auto; flex-wrap:wrap; min-height:32px; margin:0; padding:7px; }
+  .orderbox { flex:0 0 auto; height:72vh; min-height:380px; padding:8px; }
+  .ordertext { min-height:0; height:100%; font-size:clamp(28px,5vw,46px); padding:14px; }
+  body.tv-mode .stage { min-height:100vh; }
+}
+@media print {
+  body { height:9in; min-height:9in; overflow:hidden; }
+  .toolbar { display:none !important; }
+  .stage { height:9in; min-height:9in; padding:.12in .2in; }
+  .top { flex-basis:1.25in; height:1.25in; max-height:1.25in; }
+  .meta { min-height:.3in; }
+  .orderbox { flex:1 1 0; }
+}
+
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <span id="publishStatus" class="publish-status" role="status">LAN SERVER NOT CONNECTED</span>
+  <input id="adminPin" type="password" placeholder="Admin PIN" aria-label="Admin PIN" style="width:105px;padding:8px;border-radius:5px;border:1px solid #c99b42;background:#17231c;color:white">
+  <button id="publishBtn" class="publish-btn" onclick="publishOrder()">PUBLISH ORDER</button>
+  <span class="color-sequence-note" style="display:flex;align-items:center;gap:7px;color:#fff3d5;font:700 11px Arial,sans-serif;white-space:nowrap">AUTO LINE COLOURS: <b style="color:#fff;background:#111;padding:4px 7px;border-radius:3px">BLACK</b><b style="color:#fff;background:#0756c9;padding:4px 7px;border-radius:3px">BLUE</b><b style="color:#fff;background:#d00000;padding:4px 7px;border-radius:3px">RED</b><span>↻</span></span>
+  <button onclick="fitOrderText()">FIT ORDER TEXT</button>
+  <button onclick="window.print()">PRINT / SAVE PDF</button>
+</div>
+<main class="stage">
+  <header class="top">
+    <div class="published-stamp"><small>LAST PUBLISHED</small><span id="publishedAt">NOT PUBLISHED YET</span></div>
+    <div class="right-top">
+      <div class="heading"><h1>DAILY ROLL CALL ORDER</h1></div>
+      <div class="ticker"><div id="flashMessage" class="ticker-track" contenteditable="true" spellcheck="false" aria-label="Flash message">IMPORTANT ANNOUNCEMENT</div></div>
+    </div>
+  </header>
+  <div class="rule"></div>
+  <div class="meta">
+    <div><strong>DATE:</strong> <span id="date"></span></div>
+    <div><strong>TIME:</strong> <span id="time"></span></div>
+  </div>
+  <section class="orderbox">
+    <h3 contenteditable="true" spellcheck="false">TODAY'S ROLL CALL ORDER / ANNOUNCEMENTS</h3>
+    <div id="orderText" class="ordertext" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" data-placeholder="Click here and type today's orders. This large field is designed for clear TV viewing without scrolling."></div>
+  </section>
+</main>
+<script>
+const API_ORDER = '/api/order';
+const adminPinEl = document.getElementById('adminPin');
+const TV_MODE = new URLSearchParams(location.search).get('display') === '1';
+const orderEl = document.getElementById('orderText');
+const statusEl = document.getElementById('publishStatus');
+const publishBtn = document.getElementById('publishBtn');
+const publishedAtEl = document.getElementById('publishedAt');
+const flashMessageEl = document.getElementById('flashMessage');
+let lastPublished = '';
+let lastOrderHtml = '';
+let lastFlashMessage = '';
+let lastServerPublishedAt = '';
+let applyingRemote = false;
+let savedOrderRange = null;
+
+function rememberOrderSelection() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+  const range = selection.getRangeAt(0);
+  if (orderEl.contains(range.startContainer) && orderEl.contains(range.endContainer)) {
+    savedOrderRange = range.cloneRange();
+  }
+}
+
+if (TV_MODE) {
+  document.body.classList.add('tv-mode');
+  document.querySelectorAll('[contenteditable="true"]').forEach(el => {
+    el.setAttribute('contenteditable', 'false');
+  });
+}
+
+function setStatus(message, state='') {
+  if (!statusEl) return;
+  statusEl.textContent = message;
+  statusEl.className = 'publish-status ' + state;
+}
+
+function showPublishedAt(value) {
+  if (!value) { publishedAtEl.textContent = 'NOT PUBLISHED YET'; return; }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) { publishedAtEl.textContent = 'NOT PUBLISHED YET'; return; }
+  publishedAtEl.textContent = new Intl.DateTimeFormat('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(date);
+}
+function updateClock(){
+ const now=new Date();
+ document.getElementById('date').textContent=new Intl.DateTimeFormat('en-IN',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).format(now);
+ document.getElementById('time').textContent=new Intl.DateTimeFormat('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).format(now);
+}
+function getCaretTextOffset(root) {
+  const selection = window.getSelection();
+  if (!selection || !selection.rangeCount) return null;
+  const anchor = selection.anchorNode;
+  const anchorOffset = selection.anchorOffset;
+  if (!root.contains(anchor) && anchor !== root) return null;
+  let total = 0;
+  let found = false;
+  function walk(node) {
+    if (found) return;
+    if (node === anchor) {
+      if (node.nodeType === Node.TEXT_NODE) total += Math.min(anchorOffset, node.nodeValue.length);
+      else {
+        for (let i = 0; i < Math.min(anchorOffset, node.childNodes.length); i++) count(node.childNodes[i]);
+      }
+      found = true;
+      return;
+    }
+    count(node);
+  }
+  function count(node) {
+    if (found) return;
+    if (node.nodeType === Node.TEXT_NODE) { total += node.nodeValue.length; return; }
+    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') { total += 1; return; }
+    for (const child of node.childNodes) walk(child);
+  }
+  walk(root);
+  return found ? total : null;
+}
+function restoreCaretTextOffset(root, wanted) {
+  if (wanted === null || wanted === undefined) return;
+  const range = document.createRange();
+  const selection = window.getSelection();
+  let remaining = wanted;
+  let placed = false;
+  function seek(node) {
+    if (placed) return;
+    if (node.nodeType === Node.TEXT_NODE) {
+      const length = node.nodeValue.length;
+      if (remaining <= length) {
+        range.setStart(node, remaining); range.collapse(true); placed = true;
+      } else remaining -= length;
+      return;
+    }
+    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') {
+      if (remaining === 0) { range.setStartBefore(node); range.collapse(true); placed = true; }
+      else remaining -= 1;
+      return;
+    }
+    for (const child of node.childNodes) { seek(child); if (placed) return; }
+  }
+  for (const child of root.childNodes) { seek(child); if (placed) break; }
+  if (!placed) { range.selectNodeContents(root); range.collapse(false); }
+  selection.removeAllRanges(); selection.addRange(range);
+}
+function colorizeAnnouncements(keepCaret = false) {
+  // Logical lines are coloured automatically: 1 black, 2 blue, 3 red, repeat.
+  const caretOffset = keepCaret ? getCaretTextOffset(orderEl) : null;
+  const raw = (orderEl.innerText || orderEl.textContent || '').replace(/\r\n?/g, '\n');
+  const lines = raw.split('\n');
+  orderEl.innerHTML = '';
+  lines.forEach((line, index) => {
+    const span = document.createElement('span');
+    span.className = 'line-color-' + ((index % 3) + 1);
+    span.textContent = line;
+    orderEl.appendChild(span);
+    if (index < lines.length - 1) orderEl.appendChild(document.createElement('br'));
+  });
+  restoreCaretTextOffset(orderEl, caretOffset);
+}
+
+function fitOrderText(){
+ const el=orderEl;
+ if (!el || !el.clientHeight) return;
+ // Recalculate from the responsive base size each time, then shrink only as needed.
+ let size=Math.min(76, Math.max(36, Math.round(window.innerWidth * 0.044)));
+ el.style.fontSize=size+'px';
+ while ((el.scrollHeight>el.clientHeight || el.scrollWidth>el.clientWidth) && size>18) {
+   size-=1;
+   el.style.fontSize=size+'px';
+ }
+}
+async function fetchPublishedOrder() {
+  const response = await fetch(API_ORDER, {cache:'no-store'});
+  if (!response.ok) throw new Error('Server returned ' + response.status);
+  return response.json();
+}
+async function publishOrder() {
+  if (TV_MODE) return;
+  colorizeAnnouncements();
+  const text = orderEl.innerText || orderEl.textContent || '';
+  const orderHtml = orderEl.innerHTML;
+  const flashMessage = (flashMessageEl.innerText || flashMessageEl.textContent || '').trim();
+  publishBtn.disabled = true;
+  setStatus('PUBLISHING…');
+  try {
+    const response = await fetch(API_ORDER, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','x-admin-pin':adminPinEl.value || sessionStorage.getItem('rollcallAdminPin') || ''},
+      body:JSON.stringify({
+        order:text,
+        orderHtml,
+        flashMessage,
+        announcement:flashMessage,
+        publishedAt:new Date().toISOString(),
+        revision:Date.now()
+      })
+    });
+    if (!response.ok) throw new Error('Publish failed (' + response.status + ')');
+    // Some lightweight LAN servers return an empty body or plain text.
+    // Treat a successful HTTP response as published even when no JSON is returned.
+    let result = {};
+    const responseText = await response.text();
+    if (responseText.trim()) {
+      try { result = JSON.parse(responseText); }
+      catch (_) { result = {}; }
+    }
+    // Read the saved publication back from the server. This catches an old
+    // backend that accepts the POST but silently ignores announcement fields.
+    const saved = await fetchPublishedOrder();
+    const savedFlash = typeof saved.flashMessage === 'string'
+      ? saved.flashMessage
+      : (typeof saved.announcement === 'string' ? saved.announcement : null);
+    if (savedFlash === null || savedFlash !== flashMessage) {
+      throw new Error('The LAN server did not save the Important Announcement. Replace server.js with the matching version supplied with this page.');
+    }
+    const publishedAt = saved.publishedAt || result.publishedAt || new Date().toISOString();
+    if (adminPinEl.value) sessionStorage.setItem('rollcallAdminPin', adminPinEl.value);
+    lastPublished = text;
+    lastOrderHtml = orderHtml;
+    lastFlashMessage = flashMessage;
+    lastServerPublishedAt = publishedAt;
+    showPublishedAt(publishedAt);
+    setStatus('PUBLISHED • ORDER + ANNOUNCEMENT • ' + new Date(publishedAt).toLocaleTimeString('en-IN'), 'online');
+  } catch (error) {
+    setStatus('PUBLISH FAILED • CHECK LAN SERVER', 'error');
+    alert('Could not publish the order. Make sure the LAN server is running and this page is opened from the server address.\\n\\n' + error.message);
+  } finally {
+    publishBtn.disabled = false;
+  }
+}
+async function syncFromServer() {
+  try {
+    const data = await fetchPublishedOrder();
+    const incomingPublishedAt = typeof data.publishedAt === 'string' ? data.publishedAt : '';
+    const incomingFlash = typeof data.flashMessage === 'string' ? data.flashMessage : (typeof data.announcement === 'string' ? data.announcement : null);
+    const incomingOrder = typeof data.order === 'string' ? data.order : null;
+    const incomingHtml = typeof data.orderHtml === 'string' ? data.orderHtml : null;
+
+    // Treat the publication as one complete update. This is important when
+    // only the announcement or text colour changes while the order wording stays the same.
+    const publicationChanged = !!incomingPublishedAt && incomingPublishedAt !== lastServerPublishedAt;
+
+    if (incomingPublishedAt) {
+      showPublishedAt(incomingPublishedAt);
+      lastServerPublishedAt = incomingPublishedAt;
+    }
+
+    if (incomingFlash !== null && (publicationChanged || incomingFlash !== lastFlashMessage)) {
+      flashMessageEl.textContent = incomingFlash;
+      lastFlashMessage = incomingFlash;
+    }
+
+    if (incomingHtml !== null && (publicationChanged || incomingHtml !== lastOrderHtml)) {
+      applyingRemote = true;
+      orderEl.innerHTML = incomingHtml;
+      // Preserve manually applied inline colours and the automatic sentence colours.
+      if (orderEl.querySelector('.line-color-1, .line-color-2, .line-color-3')) {
+        delete orderEl.dataset.manualColors;
+      } else {
+        colorizeAnnouncements();
+      }
+      lastOrderHtml = incomingHtml;
+      if (incomingOrder !== null) lastPublished = incomingOrder;
+      fitOrderText();
+      applyingRemote = false;
+    } else if (incomingOrder !== null && (publicationChanged || incomingOrder !== lastPublished)) {
+      applyingRemote = true;
+      orderEl.textContent = incomingOrder;
+      delete orderEl.dataset.manualColors;
+      colorizeAnnouncements();
+      lastPublished = incomingOrder;
+      lastOrderHtml = orderEl.innerHTML;
+      fitOrderText();
+      applyingRemote = false;
+    }
+
+    if (TV_MODE) {
+      setStatus('LIVE • ORDER + ANNOUNCEMENT SYNCED', 'online');
+    } else if (!statusEl.classList.contains('online')) {
+      setStatus('LAN SERVER CONNECTED', 'online');
+    }
+  } catch (error) {
+    applyingRemote = false;
+    setStatus('LAN SERVER NOT CONNECTED', 'error');
+  }
+}
+if (!TV_MODE) {
+  // Keep the editor to simple text + line breaks so each logical line can be
+  // recoloured immediately without a manual colour picker or toolbar action.
+  orderEl.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      document.execCommand('insertLineBreak');
+      colorizeAnnouncements(true);
+      setStatus('UNPUBLISHED CHANGES • AUTOMATIC LINE COLOURS', '');
+      fitOrderText();
+    }
+  });
+  orderEl.addEventListener('input', () => {
+    if (applyingRemote) return;
+    colorizeAnnouncements(true);
+    setStatus('UNPUBLISHED CHANGES • AUTOMATIC LINE COLOURS', '');
+    fitOrderText();
+  });
+  flashMessageEl.addEventListener('input', () => { if (!applyingRemote) setStatus('UNPUBLISHED CHANGES', ''); });
+}
+window.addEventListener('resize',fitOrderText);
+updateClock(); setInterval(updateClock,1000);
+syncFromServer();
+setInterval(syncFromServer, 2000);
+setTimeout(fitOrderText,300);
+</script>
+</body>
+</html>
